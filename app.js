@@ -18,13 +18,13 @@ const layout={id:"joseph-standard",name:"Joseph — Standard",rows:{
 }};
 const defaultState={seedVersion:SEED_VERSION,selectedDate:INITIAL_DATE,performances:{[INITIAL_DATE]:{label:"29 September 2026",layoutId:layout.id,bookings:structuredClone(INITIAL_BOOKINGS)}}};
 let state=loadState(),activeSeat=null,toastTimer;
-const performanceSelect=document.querySelector("#performance-select"),performanceHeading=document.querySelector("#performance-heading"),seatMap=document.querySelector("#seat-map"),seatDialog=document.querySelector("#seat-dialog"),dialogContent=document.querySelector("#dialog-content"),dayDialog=document.querySelector("#day-dialog"),uploadInput=document.querySelector("#booking-upload");
+const performanceSelect=document.querySelector("#performance-select"),scanPerformanceSelect=document.querySelector("#scan-performance-select"),performanceHeading=document.querySelector("#performance-heading"),seatMap=document.querySelector("#seat-map"),seatDialog=document.querySelector("#seat-dialog"),dialogContent=document.querySelector("#dialog-content"),dayDialog=document.querySelector("#day-dialog"),uploadInput=document.querySelector("#booking-upload");
 
 function loadState(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));if(saved?.performances){if(saved.seedVersion!==SEED_VERSION){saved.performances[INITIAL_DATE]??={label:"29 September 2026",layoutId:layout.id,bookings:{}};saved.performances[INITIAL_DATE].bookings={...INITIAL_BOOKINGS,...saved.performances[INITIAL_DATE].bookings};saved.seedVersion=SEED_VERSION;localStorage.setItem(STORAGE_KEY,JSON.stringify(saved))}return saved}}catch(error){console.warn(error)}return structuredClone(defaultState)}
 function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
 function currentPerformance(){return state.performances[state.selectedDate]}
 function formatDate(date){return new Intl.DateTimeFormat("en-ZA",{day:"numeric",month:"long",year:"numeric"}).format(new Date(`${date}T12:00:00`))}
-function refreshPerformanceOptions(){performanceSelect.innerHTML="";Object.keys(state.performances).sort().forEach(date=>{const option=document.createElement("option");option.value=date;option.textContent=state.performances[date].label||formatDate(date);option.selected=date===state.selectedDate;performanceSelect.append(option)})}
+function refreshPerformanceOptions(){[performanceSelect,scanPerformanceSelect].forEach(select=>{select.innerHTML="";Object.keys(state.performances).sort().forEach(date=>{const option=document.createElement("option");option.value=date;option.textContent=state.performances[date].label||formatDate(date);option.selected=date===state.selectedDate;select.append(option)})})}
 function render(){if(!currentPerformance())state.selectedDate=Object.keys(state.performances).sort()[0];refreshPerformanceOptions();performanceHeading.textContent=currentPerformance().label;renderSeats();renderCounts()}
 function rowLabel(label){const el=document.createElement("span");el.className="row-label";el.textContent=label;return el}
 function renderSeats(){seatMap.innerHTML="";const bookings=currentPerformance().bookings;Object.entries(layout.rows).forEach(([rowName,numbers],index)=>{const row=document.createElement("div");row.className="seat-row";row.setAttribute("aria-label",`Row ${rowName}`);row.append(rowLabel(rowName));for(let number=1;number<=30;number++){const name=`${rowName}${number}`;if(numbers.includes(number)){const booking=bookings[name],seat=document.createElement("button");seat.type="button";seat.className=`seat${booking?` ${booking.source==="door"?"door":"booked"}`:""}`;seat.textContent=number;seat.title=booking?`${name} — ${booking.purchaser||"Booked"}`:`${name} — Available`;seat.setAttribute("aria-label",seat.title);seat.addEventListener("click",()=>openSeat(name));row.append(seat)}else{const gap=document.createElement("span");gap.className="seat-gap";gap.setAttribute("aria-hidden","true");row.append(gap)}}row.append(rowLabel(rowName));seatMap.append(row);if([1,4,7,10].includes(index)){const spacer=document.createElement("div");spacer.style.height="10px";seatMap.append(spacer)}})}
@@ -41,15 +41,32 @@ async function importBookings(file){if(!file)return;if(!window.XLSX){showToast("
 function escapeHtml(value){return String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
 function showToast(message){const toast=document.querySelector("#toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),3200)}
 
-const scanDialog=document.querySelector("#scan-dialog"),scanResult=document.querySelector("#scan-result"),scannerHelp=document.querySelector("#scanner-help");
+const scanResult=document.querySelector("#scan-result"),scannerHelp=document.querySelector("#scanner-help"),seatView=document.querySelector("#seat-view"),scanView=document.querySelector("#scan-view"),seatActions=document.querySelector("#seat-actions"),seatModeButton=document.querySelector("#seat-mode-button"),scanModeButton=document.querySelector("#scan-mode-button");
 let ticketScanner=null;
 
-async function openScanner(){
+async function showScanMode(){
+  seatView.hidden=true;
+  scanView.hidden=false;
+  seatActions.hidden=true;
+  seatModeButton.classList.remove("active");
+  scanModeButton.classList.add("active");
+  seatModeButton.setAttribute("aria-pressed","false");
+  scanModeButton.setAttribute("aria-pressed","true");
   scanResult.innerHTML="";
   document.querySelector("#manual-barcode").value="";
   scannerHelp.textContent="Point the camera at the ticket’s QR code or barcode.";
-  scanDialog.showModal();
   await startScanner();
+}
+
+async function showSeatMode(){
+  await stopScanner();
+  scanView.hidden=true;
+  seatView.hidden=false;
+  seatActions.hidden=false;
+  scanModeButton.classList.remove("active");
+  seatModeButton.classList.add("active");
+  scanModeButton.setAttribute("aria-pressed","false");
+  seatModeButton.setAttribute("aria-pressed","true");
 }
 
 async function startScanner(){
@@ -114,12 +131,10 @@ function admitTicket(seatName){
   document.querySelector("#scan-again").addEventListener("click",startScanner);
 }
 
-async function closeScanner(){await stopScanner();scanDialog.close()}
-
-document.querySelector("#scan-button").addEventListener("click",openScanner);
-document.querySelector("#scan-dialog-close").addEventListener("click",closeScanner);
+seatModeButton.addEventListener("click",showSeatMode);
+scanModeButton.addEventListener("click",showScanMode);
+document.querySelector("#start-camera").addEventListener("click",startScanner);
 document.querySelector("#manual-scan-form").addEventListener("submit",async event=>{event.preventDefault();await stopScanner();checkTicket(document.querySelector("#manual-barcode").value)});
-scanDialog.addEventListener("click",event=>{if(event.target===scanDialog)closeScanner()});
-scanDialog.addEventListener("close",stopScanner);
-performanceSelect.addEventListener("change",event=>{state.selectedDate=event.target.value;saveState();render()});uploadInput.addEventListener("change",event=>importBookings(event.target.files[0]));document.querySelector("#dialog-close").addEventListener("click",()=>seatDialog.close());document.querySelector("#day-dialog-close").addEventListener("click",()=>dayDialog.close());document.querySelector("#add-day-button").addEventListener("click",()=>{document.querySelector("#new-day").value="";dayDialog.showModal()});document.querySelector("#day-form").addEventListener("submit",event=>{event.preventDefault();const date=document.querySelector("#new-day").value;if(!date)return;if(!state.performances[date])state.performances[date]={label:formatDate(date),layoutId:layout.id,bookings:{}};state.selectedDate=date;saveState();dayDialog.close();render();showToast(`${formatDate(date)} is ready for bookings`)});[seatDialog,dayDialog].forEach(dialog=>dialog.addEventListener("click",event=>{if(event.target===dialog)dialog.close()}));render();
+function changePerformance(event){state.selectedDate=event.target.value;saveState();render();scanResult.innerHTML=`<div class="scan-empty"><p>Scan a ticket or enter its barcode to check whether it exists for this performance.</p></div>`}
+performanceSelect.addEventListener("change",changePerformance);scanPerformanceSelect.addEventListener("change",changePerformance);uploadInput.addEventListener("change",event=>importBookings(event.target.files[0]));document.querySelector("#dialog-close").addEventListener("click",()=>seatDialog.close());document.querySelector("#day-dialog-close").addEventListener("click",()=>dayDialog.close());document.querySelector("#add-day-button").addEventListener("click",()=>{document.querySelector("#new-day").value="";dayDialog.showModal()});document.querySelector("#day-form").addEventListener("submit",event=>{event.preventDefault();const date=document.querySelector("#new-day").value;if(!date)return;if(!state.performances[date])state.performances[date]={label:formatDate(date),layoutId:layout.id,bookings:{}};state.selectedDate=date;saveState();dayDialog.close();render();showToast(`${formatDate(date)} is ready for bookings`)});[seatDialog,dayDialog].forEach(dialog=>dialog.addEventListener("click",event=>{if(event.target===dialog)dialog.close()}));render();
 
