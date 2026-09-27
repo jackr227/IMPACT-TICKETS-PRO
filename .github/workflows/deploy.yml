@@ -1,0 +1,35 @@
+name: Deploy Impact Tickets Pro
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: impact-tickets-pro-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publish to cPanel
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out site
+        uses: actions/checkout@v4
+
+      - name: Upload site to cPanel
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.CPANEL_HOST }}
+          username: ${{ secrets.CPANEL_USER }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          port: ${{ secrets.CPANEL_PORT }}
+          source: "index.html"
+          target: "/home/${{ secrets.CPANEL_USER }}/public_html/itp/"
+          overwrite: true
