@@ -40,5 +40,86 @@ function findValue(row,keys){for(const key of keys)if(row[key])return row[key];r
 async function importBookings(file){if(!file)return;if(!window.XLSX){showToast("Spreadsheet reader unavailable. Refresh and try again.");return}try{const bytes=await file.arrayBuffer(),workbook=XLSX.read(bytes,{type:"array"}),sheet=workbook.Sheets[workbook.SheetNames[0]],rows=XLSX.utils.sheet_to_json(sheet,{defval:"",raw:false});if(!rows.length)throw new Error("The spreadsheet contains no bookings.");let imported=0,skipped=0;const bookings=currentPerformance().bookings;rows.forEach(raw=>{const row=normalizedRow(raw),name=normalizeSeat(findValue(row,["seatname","seat","seatnumber"]));if(!seatExists(name)){skipped++;return}bookings[name]={purchaser:findValue(row,["purchaser","customer","name","purchasername"]),email:findValue(row,["purchaseremail","email","emailaddress"]),phone:findValue(row,["phone","phonenumber","mobile"]),barcode:findValue(row,["barcode","ticketbarcode","reference","bookingreference"]),source:"webtickets"};imported++});saveState();render();showToast(`${imported} bookings imported${skipped?` · ${skipped} rows skipped`:""}`)}catch(error){console.error(error);showToast(error.message||"Could not read that spreadsheet")}finally{uploadInput.value=""}}
 function escapeHtml(value){return String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
 function showToast(message){const toast=document.querySelector("#toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),3200)}
+
+const scanDialog=document.querySelector("#scan-dialog"),scanResult=document.querySelector("#scan-result"),scannerHelp=document.querySelector("#scanner-help");
+let ticketScanner=null;
+
+async function openScanner(){
+  scanResult.innerHTML="";
+  document.querySelector("#manual-barcode").value="";
+  scannerHelp.textContent="Point the camera at the ticket’s QR code or barcode.";
+  scanDialog.showModal();
+  await startScanner();
+}
+
+async function startScanner(){
+  if(!window.Html5Qrcode){scannerHelp.textContent="Camera scanning is unavailable. Enter the barcode below.";return}
+  try{
+    ticketScanner??=new Html5Qrcode("scanner-reader");
+    if(ticketScanner.isScanning)return;
+    scanResult.innerHTML="";
+    await ticketScanner.start({facingMode:"environment"},{fps:10,qrbox:{width:250,height:160}},onTicketScanned,()=>{});
+  }catch(error){
+    console.warn(error);
+    scannerHelp.textContent="The camera could not start. Allow camera access or enter the barcode below.";
+  }
+}
+
+async function stopScanner(){
+  if(ticketScanner?.isScanning){try{await ticketScanner.stop()}catch(error){console.warn(error)}}
+}
+
+async function onTicketScanned(decodedText){
+  await stopScanner();
+  checkTicket(decodedText);
+}
+
+function barcodeCandidates(rawValue){
+  const raw=String(rawValue??"").trim(),values=new Set([raw]);
+  try{
+    const url=new URL(raw);
+    ["barcode","ticket","reference","ref","code"].forEach(key=>{const value=url.searchParams.get(key);if(value)values.add(value.trim())});
+  }catch(error){}
+  return [...values].filter(Boolean);
+}
+
+function findTicket(rawValue){
+  const candidates=barcodeCandidates(rawValue);
+  return Object.entries(currentPerformance().bookings).find(([,booking])=>candidates.includes(String(booking.barcode??"").trim()));
+}
+
+function checkTicket(rawValue){
+  const match=findTicket(rawValue);
+  if(!match){
+    scanResult.innerHTML=`<div class="scan-card invalid"><h3>Ticket not found</h3><p>No matching ticket exists for ${escapeHtml(currentPerformance().label)}.</p><p class="scan-meta">Scanned: ${escapeHtml(rawValue)}</p><button class="button button-secondary" id="scan-again" type="button">Scan another ticket</button></div>`;
+    document.querySelector("#scan-again").addEventListener("click",startScanner);
+    return;
+  }
+  const [seatName,booking]=match;
+  if(booking.checkedInAt){
+    const usedAt=new Intl.DateTimeFormat("en-ZA",{dateStyle:"medium",timeStyle:"short"}).format(new Date(booking.checkedInAt));
+    scanResult.innerHTML=`<div class="scan-card used"><h3>Already admitted</h3><p><strong>${escapeHtml(booking.purchaser||"Ticket holder")}</strong> · Seat ${escapeHtml(seatName)}</p><p class="scan-meta">First scanned ${escapeHtml(usedAt)}</p><button class="button button-secondary" id="scan-again" type="button">Scan another ticket</button></div>`;
+    document.querySelector("#scan-again").addEventListener("click",startScanner);
+    return;
+  }
+  scanResult.innerHTML=`<div class="scan-card valid"><h3>Valid ticket</h3><p><strong>${escapeHtml(booking.purchaser||"Ticket holder")}</strong></p><p>Seat ${escapeHtml(seatName)} · Barcode ${escapeHtml(booking.barcode)}</p><button class="button button-primary" id="admit-ticket" type="button">Admit and mark scanned</button></div>`;
+  document.querySelector("#admit-ticket").addEventListener("click",()=>admitTicket(seatName));
+}
+
+function admitTicket(seatName){
+  const booking=currentPerformance().bookings[seatName];
+  booking.checkedInAt=new Date().toISOString();
+  saveState();
+  scanResult.innerHTML=`<div class="scan-card valid"><h3>Admitted</h3><p><strong>${escapeHtml(booking.purchaser||"Ticket holder")}</strong> · Seat ${escapeHtml(seatName)}</p><p class="scan-meta">This ticket is now marked as scanned.</p><button class="button button-secondary" id="scan-again" type="button">Scan next ticket</button></div>`;
+  document.querySelector("#scan-again").addEventListener("click",startScanner);
+}
+
+async function closeScanner(){await stopScanner();scanDialog.close()}
+
+document.querySelector("#scan-button").addEventListener("click",openScanner);
+document.querySelector("#scan-dialog-close").addEventListener("click",closeScanner);
+document.querySelector("#manual-scan-form").addEventListener("submit",async event=>{event.preventDefault();await stopScanner();checkTicket(document.querySelector("#manual-barcode").value)});
+scanDialog.addEventListener("click",event=>{if(event.target===scanDialog)closeScanner()});
+scanDialog.addEventListener("close",stopScanner);
 performanceSelect.addEventListener("change",event=>{state.selectedDate=event.target.value;saveState();render()});uploadInput.addEventListener("change",event=>importBookings(event.target.files[0]));document.querySelector("#dialog-close").addEventListener("click",()=>seatDialog.close());document.querySelector("#day-dialog-close").addEventListener("click",()=>dayDialog.close());document.querySelector("#add-day-button").addEventListener("click",()=>{document.querySelector("#new-day").value="";dayDialog.showModal()});document.querySelector("#day-form").addEventListener("submit",event=>{event.preventDefault();const date=document.querySelector("#new-day").value;if(!date)return;if(!state.performances[date])state.performances[date]={label:formatDate(date),layoutId:layout.id,bookings:{}};state.selectedDate=date;saveState();dayDialog.close();render();showToast(`${formatDate(date)} is ready for bookings`)});[seatDialog,dayDialog].forEach(dialog=>dialog.addEventListener("click",event=>{if(event.target===dialog)dialog.close()}));render();
 

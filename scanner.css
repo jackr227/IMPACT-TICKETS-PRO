@@ -1,0 +1,21 @@
+.scan-dialog { width: min(560px, calc(100% - 28px)); }
+.scan-dialog h2 { margin-bottom: 16px; }
+#scanner-reader { min-height: 230px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #050608; }
+#scanner-reader video { border-radius: 11px; }
+.scanner-help { margin: 12px 0 16px; color: var(--muted); font-size: .86rem; }
+.manual-scan-form { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+.manual-scan-form .field { margin: 0; }
+.scan-result { margin-top: 18px; }
+.scan-card { padding: 17px; border: 1px solid var(--line); border-radius: 13px; background: var(--panel2); }
+.scan-card.valid { border-color: #2f9e62; background: rgba(47, 158, 98, .12); }
+.scan-card.invalid { border-color: var(--booked); background: rgba(230, 74, 85, .12); }
+.scan-card.used { border-color: #e6a23c; background: rgba(230, 162, 60, .12); }
+.scan-card h3 { margin: 0 0 5px; font-size: 1.2rem; }
+.scan-card p { margin: 3px 0; color: #dce1ea; }
+.scan-card .scan-meta { color: var(--muted); font-size: .82rem; }
+.scan-card .button { margin-top: 14px; width: 100%; }
+@media (max-width: 540px) {
+  .manual-scan-form { grid-template-columns: 1fr; }
+  .scan-dialog { padding: 20px 15px; }
+}
+
