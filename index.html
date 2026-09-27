@@ -3,19 +3,66 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090b10">
   <title>Impact Tickets Pro</title>
-  <style>
-    html, body { height: 100%; margin: 0; }
-    body {
-      display: grid;
-      place-items: center;
-      background: #000;
-      color: #fff;
-      font-family: Arial, Helvetica, sans-serif;
-    }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main>IMPACT TICKETS PRO</main>
+  <header class="topbar">
+    <div><p class="eyebrow">Impact Theatre</p><h1>Tickets Pro</h1></div>
+    <div class="topbar-actions">
+      <button class="button button-secondary" id="add-day-button" type="button">Add performance</button>
+      <label class="button button-primary" for="booking-upload">Upload bookings</label>
+      <input id="booking-upload" type="file" accept=".xlsx,.xls,.csv" hidden>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="toolbar" aria-label="Performance controls">
+      <label><span>Performance</span><select id="performance-select"></select></label>
+      <label><span>Seating plan</span><select id="layout-select"><option value="joseph-standard">Joseph — Standard</option></select></label>
+      <div class="summary" aria-live="polite">
+        <div><strong id="booked-count">0</strong><span>Booked</span></div>
+        <div><strong id="available-count">0</strong><span>Available</span></div>
+        <div><strong id="capacity-count">0</strong><span>Capacity</span></div>
+      </div>
+    </section>
+
+    <section class="plan-card">
+      <div class="plan-heading">
+        <div><p class="eyebrow">Savoy Theatre</p><h2 id="performance-heading">29 September 2026</h2></div>
+        <div class="legend" aria-label="Seat legend">
+          <span><i class="legend-seat available"></i>Available</span>
+          <span><i class="legend-seat booked"></i>Booked</span>
+          <span><i class="legend-seat door"></i>Door booking</span>
+        </div>
+      </div>
+      <div class="seat-scroll">
+        <div class="theatre" id="theatre">
+          <div class="stage">SAVOY STAGE <small>ORCHESTRA</small></div>
+          <div id="seat-map" class="seat-map" aria-label="Joseph seating plan"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="seat-dialog" class="dialog">
+    <button class="dialog-close" id="dialog-close" type="button" aria-label="Close">×</button>
+    <div id="dialog-content"></div>
+  </dialog>
+
+  <dialog id="day-dialog" class="dialog dialog-small">
+    <button class="dialog-close" id="day-dialog-close" type="button" aria-label="Close">×</button>
+    <form id="day-form">
+      <p class="eyebrow">New performance</p><h2>Add another day</h2>
+      <label class="field"><span>Date</span><input id="new-day" type="date" required></label>
+      <button class="button button-primary full-width" type="submit">Add performance</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
+
